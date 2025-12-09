@@ -3332,7 +3332,7 @@ MonoBehaviour:
   config:
     rows: 3
     cols: 6
-    cardSpacing: -80
+    cardSpacing: -40
     containerSize: {x: 1, y: 1}
   cardDataList:
   - id: 0
