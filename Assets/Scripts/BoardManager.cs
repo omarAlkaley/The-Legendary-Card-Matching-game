@@ -103,8 +103,8 @@ public class BoardManager
 		float cellHeight = ( usableHeight - totalSpacingY ) / config.rows;
 
 		// Square card size, clamped to min/max
-		float minSize = 400f;   // Minimum size of card
-		float maxSize = 450f;  // Maximum size of card
+		float minSize = 230f;   // Minimum size of card
+		float maxSize = 250f;  // Maximum size of card
 		float cardSize = Mathf.Clamp(Mathf.Min(cellWidth , cellHeight) , minSize , maxSize);
 
 		// Configure GridLayoutGroup
