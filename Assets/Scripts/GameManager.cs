@@ -1,208 +1,152 @@
-using UnityEngine;
-using System.Collections;
 using System.Collections.Generic;
-
-// Uses your uploaded IGameState and IMatchStrategy (they stay unchanged). 
+using UnityEngine;
+using TMPro;
+using UnityEngine.UI;
 public class GameManager : MonoBehaviour
 {
-	public static GameManager Instance { get; private set; }
-
-	[Header("References")]
-	public CardFactory factory;
-	public EventManager EventManager; // assign in inspector
-	public MonoBehaviour matchStrategyBehaviour; // attach a component that implements IMatchStrategy or leave null to use ExactMatchStrategy
-
-	[Header("Layout")]
-	public int rows = 3;
-	public int cols = 4;
-
-	[Header("Scoring")]
-	public int matchPoints = 100;
-	public int mismatchPenalty = 10;
-
-	// internal
-	List<Card> cards = new List<Card>();
-	IGameState currentState;
-	public IMatchStrategy matchStrategy;
-
-	// Visual buffer: stores cards that have been visually flipped but not logically consumed by FSM
-	Queue<Card> visualBuffer = new Queue<Card>();
-
-	// gameplay tracking
-	public int Score { get; private set; } = 0;
-	int matchedCount = 0;
-
-	void Awake()
+	private static GameManager _instance;
+	public static GameManager Instance
 	{
-		if (Instance == null) Instance = this;
-		else Destroy(gameObject);
-	}
-
-	void Start()
-	{
-		// setup match strategy
-		if (matchStrategyBehaviour != null && matchStrategyBehaviour is IMatchStrategy)
-			matchStrategy = matchStrategyBehaviour as IMatchStrategy;
-		else
-			matchStrategy = new ExactMatchStrategy(); // fallback (your uploaded file). :contentReference[oaicite:3]{index=3}
-
-		// if there's a saved game, load, otherwise start new
-		var data = SaveSystem.Load();
-		if (data != null) LoadFromData(data);
-		else StartNew(rows , cols);
-	}
-
-	#region FSM API
-	public void ChangeState( IGameState state )
-	{
-		currentState = state;
-		currentState?.Enter();
-	}
-
-	// Called by Card when it is visually flipped
-	public void RegisterVisualFlip( Card card )
-	{
-		// A2: visual flips are always accepted and buffered
-		visualBuffer.Enqueue(card);
-
-		// If current state can accept cards right now, let it try to consume the next pair(s).
-		TryConsumeVisuals();
-	}
-
-	// Attempt to feed visual flips to the FSM when appropriate
-	public void TryConsumeVisuals()
-	{
-		// If no state or state doesn't accept, just return.
-		if (currentState == null) return;
-
-		// Let the current state pull cards from visualBuffer by repeatedly calling OnCardSelected
-		// but states must be written to accept being called only when they can.
-		while (visualBuffer.Count > 0)
+		get
 		{
-			// Peek the next visual flip; let current state decide if it wants it.
-			// We pass it to the state via OnCardSelected - state implementations will ignore if they're not ready.
-			Card next = visualBuffer.Peek();
-			int prevCount = visualBuffer.Count;
-			currentState.OnCardSelected(next);
-
-			// If the state consumed it, it should have removed it from the buffer by calling DequeueVisual() helper below.
-			// To keep states simple, we provide DequeueVisual() they should call when they accept a card.
-			if (visualBuffer.Count == prevCount)
+			if (_instance == null)
 			{
-				// state didn't accept the card (e.g., in Checking state) -> stop trying
-				break;
+				_instance = FindObjectOfType<GameManager>();
 			}
-			// else, continue while loop in case the state accepted and can accept more
+			return _instance;
 		}
 	}
 
-	// Called by state to indicate it accepted a visual flip
-	public Card DequeueVisual()
+	[Header("UI References")]
+	public RectTransform boardContainer;
+	public GameObject cardPrefab;
+	public TextMeshProUGUI scoreText;
+	public TextMeshProUGUI movesText;
+	public Button newGameButton;
+
+	[Header("Configuration")]
+	public GameConfig config;
+	public List<CardData> cardDataList;
+
+	[Header("Card Visuals")]
+	public Sprite cardBackSprite;
+	public Color cardBackColor = Color.blue;
+
+	[Header("Audio")]
+	public AudioClip flipSound;
+	public AudioClip matchSound;
+	public AudioClip mismatchSound;
+	public AudioClip gameOverSound;
+
+	private AudioSource audioSource;
+	private BoardManager boardManager;
+	private ScoreManager scoreManager;
+	private SaveLoadManager saveLoadManager;
+
+	private void Awake()
 	{
-		if (visualBuffer.Count == 0) return null;
-		return visualBuffer.Dequeue();
-	}
-	#endregion
-
-	#region Game Setup / Save / Load
-	public void StartNew( int r , int c )
-	{
-		rows = r; cols = c;
-		matchedCount = 0;
-		Score = 0;
-		EventManager.DispatchScore(Score);
-
-		// build ids (pairs)
-		int total = rows * cols;
-		if (total % 2 != 0) { total -= 1; cols = total / rows; } // ensure even
-
-		int[] ids = new int[total];
-		int pairCount = total / 2;
-		for (int i = 0; i < pairCount; i++) { ids[i * 2] = i; ids[i * 2 + 1] = i; }
-
-		// shuffle ids
-		for (int i = 0; i < ids.Length; i++) { int rIdx = Random.Range(i , ids.Length); int tmp = ids[rIdx]; ids[rIdx] = ids[i]; ids[i] = tmp; }
-
-		// create visuals
-		factory.Clear();
-		cards = factory.CreateCards(rows , cols , ids);
-
-		// initial state
-		ChangeState(new WaitingState(this));
-	}
-
-	void LoadFromData( GameData d )
-	{
-		rows = d.rows; cols = d.cols;
-		Score = d.score;
-		EventManager.DispatchScore(Score);
-
-		factory.Clear();
-		cards = factory.CreateCards(rows , cols , d.cardIds);
-
-		// apply matched flags
-		matchedCount = 0;
-		for (int i = 0; i < d.matched.Length && i < cards.Count; i++)
+		if (_instance != null && _instance != this)
 		{
-			if (d.matched[i])
-			{
-				cards[i].SetMatched();
-				matchedCount++;
-			}
+			Destroy(gameObject);
+			return;
 		}
+		_instance = this;
 
-		ChangeState(new WaitingState(this));
-	}
+		audioSource = gameObject.AddComponent<AudioSource>();
+		boardManager = new BoardManager(this);
+		scoreManager = new ScoreManager();
+		saveLoadManager = new SaveLoadManager();
 
-	public void SaveProgress()
-	{
-		var data = new GameData();
-		data.rows = rows; data.cols = cols;
-		int total = rows * cols;
-		data.cardIds = new int[total];
-		data.matched = new bool[total];
-
-		for (int i = 0; i < total; i++)
+		if (newGameButton != null)
 		{
-			var c = factory.grid.transform.GetChild(i).GetComponent<Card>();
-			data.cardIds[i] = c.Id;
-			data.matched[i] = c.IsRevealed && c.IsLocked; // IsLocked indicates matched
+			newGameButton.onClick.AddListener(StartNewGame);
 		}
-
-		data.score = Score;
-		SaveSystem.Save(data);
 	}
 
-	#endregion
-
-	#region Scoring + Match handling (used by states)
-	public void OnMatchFound( Card a , Card b )
+	private void Start()
 	{
-		matchedCount += 2;
-		Score += matchPoints;
-		EventManager.DispatchScore(Score);
-		a.SetMatched();
-		b.SetMatched();
-		EventManager.PlayMatchSFX();
-		SaveProgress();
-
-		// check win
-		if (matchedCount >= cards.Count)
+		// Try to load saved game, otherwise start new
+		if (!LoadGame())
 		{
-			EventManager.DispatchGameOver();
+			StartNewGame();
 		}
 	}
 
-	public void OnMismatchFound( Card a , Card b )
+	public void StartNewGame()
 	{
-		Score = Mathf.Max(0 , Score - mismatchPenalty);
-		EventManager.DispatchScore(Score);
-		EventManager.PlayMismatchSFX();
-
-		// close them after a small delay (state will schedule closes)
-		SaveProgress();
+		scoreManager.ResetScore();
+		UpdateUI();
+		boardManager.CreateBoard(config);
 	}
-	#endregion
 
-	public Coroutine StartGameCoroutine( IEnumerator coroutine ) => StartCoroutine(coroutine);
+	public void SaveGame()
+	{
+		SaveData data = new SaveData
+		{
+			score = scoreManager.Score ,
+			moves = scoreManager.Moves ,
+			matchedCardIndices = boardManager.GetMatchedCardIndices() ,
+			rows = config.rows ,
+			cols = config.cols
+		};
+		saveLoadManager.Save(data);
+	}
+
+	public bool LoadGame()
+	{
+		SaveData data = saveLoadManager.Load();
+		if (data != null)
+		{
+			config.rows = data.rows;
+			config.cols = data.cols;
+			scoreManager.SetScore(data.score , data.moves);
+			UpdateUI();
+			boardManager.CreateBoard(config , data.matchedCardIndices);
+			return true;
+		}
+		return false;
+	}
+
+	public void PlaySound( AudioClip clip )
+	{
+		if (clip != null && audioSource != null)
+		{
+			audioSource.PlayOneShot(clip);
+		}
+	}
+
+	public void OnCardsMatched()
+	{
+		scoreManager.AddScore(100);
+		UpdateUI();
+		PlaySound(matchSound);
+		SaveGame();
+
+		if (boardManager.AllCardsMatched())
+		{
+			PlaySound(gameOverSound);
+			Debug.Log("Game Over! Final Score: " + scoreManager.Score);
+		}
+	}
+
+	public void OnCardsMismatched()
+	{
+		PlaySound(mismatchSound);
+		SaveGame();
+	}
+
+	public void OnCardFlipped()
+	{
+		scoreManager.IncrementMoves();
+		UpdateUI();
+		PlaySound(flipSound);
+	}
+
+	private void UpdateUI()
+	{
+		if (scoreText != null)
+			scoreText.text = $"Score: {scoreManager.Score}";
+		if (movesText != null)
+			movesText.text = $"Moves: {scoreManager.Moves}";
+	}
 }
