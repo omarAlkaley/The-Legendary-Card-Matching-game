@@ -1,18 +1,10 @@
-using UnityEngine;
-
 public class EndState : IGameState
 {
-	private GameManager game;
-
-	public EndState( GameManager game )
-	{
-		this.game = game;
-	}
-
+	GameManager game;
+	public EndState( GameManager g ) { game = g; }
 	public void Enter()
 	{
-		Debug.Log("GAME COMPLETE!");
+		// end logic handled by GameManager's DispatchGameOver
 	}
-
-	public void OnCardSelected( Card card ) { }
+	public void OnCardSelected( Card card ) { /* ignore */ }
 }

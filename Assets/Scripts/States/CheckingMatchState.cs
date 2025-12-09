@@ -1,51 +1,47 @@
+using System.Collections;
 using UnityEngine;
 
 public class CheckingMatchState : IGameState
 {
-	private GameManager game;
+	GameManager game;
+	Card a, b;
+	bool comparisonStarted = false;
 
-	public CheckingMatchState( GameManager game )
+	public CheckingMatchState( GameManager g , Card a , Card b )
 	{
-		this.game = game;
+		game = g; this.a = a; this.b = b;
 	}
 
 	public void Enter()
 	{
-		game.StartCoroutine(CheckMatchCoroutine());
+		// start comparison but DO NOT prevent further visual flips
+		comparisonStarted = true;
+		game.StartGameCoroutine(CompareCoroutine());
 	}
 
-	private System.Collections.IEnumerator CheckMatchCoroutine()
+	// A2: OnCardSelected should ignore additional cards while checking, so do nothing here.
+	public void OnCardSelected( Card card ) { /* intentionally ignored */ }
+
+	System.Collections.IEnumerator CompareCoroutine()
 	{
-		yield return new WaitForSeconds(0.5f);
+		// small wait for flip animation to mostly finish
+		yield return new WaitForSeconds(0.35f);
 
-		bool isMatch = game.MatchStrategy.IsMatch(game.FirstCard , game.SecondCard);
-
-		if (isMatch)
+		if (game.matchStrategy.IsMatch(a , b))
 		{
-			game.EventManager.Match(game.FirstCard , game.SecondCard);
-
-			game.MatchedCards += 2;
-
-			if (game.MatchedCards == game.Cards.Count)
-			{
-				game.EventManager.GameComplete();
-				game.ChangeState(new EndState(game));
-				yield break;
-			}
-
-			game.ChangeState(new WaitingState(game));
+			game.OnMatchFound(a , b);
 		}
 		else
 		{
-			game.EventManager.Mismatch(game.FirstCard , game.SecondCard);
-
-			yield return new WaitForSeconds(0.6f);
-			game.FirstCard.Hide();
-			game.SecondCard.Hide();
-
-			game.ChangeState(new WaitingState(game));
+			game.OnMismatchFound(a , b);
+			// schedule close after a delay; but allow user to keep flipping
+			yield return new WaitForSeconds(0.4f);
+			a.CloseVisual();
+			b.CloseVisual();
 		}
-	}
 
-	public void OnCardSelected( Card card ) { }
+		// After processing, return to waiting state and try to consume any buffered visual flips
+		game.ChangeState(new WaitingState(game));
+		game.TryConsumeVisuals();
+	}
 }

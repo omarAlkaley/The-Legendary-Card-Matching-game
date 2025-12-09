@@ -1,22 +1,27 @@
+using System.Collections;
+
 public class FirstFlipState : IGameState
 {
-	private GameManager game;
+	GameManager game;
+	Card first;
 
-	public FirstFlipState( GameManager game )
+	public FirstFlipState( GameManager g , Card firstCard )
 	{
-		this.game = game;
+		game = g; first = firstCard;
 	}
 
 	public void Enter() { }
 
 	public void OnCardSelected( Card card )
 	{
-		if (card.IsRevealed) return;
+		// Attempt to take next visual flip
+		Card dequeued = game.DequeueVisual();
+		if (dequeued == null || dequeued != card) return; // not accepted
 
-		game.SecondCard = card;
-		card.Reveal();
-		game.EventManager.CardRevealed(card);
+		// Guard: same card?
+		if (dequeued == first) return;
 
-		game.ChangeState(new CheckingMatchState(game));
+		// Move to checking state with first & second
+		game.ChangeState(new CheckingMatchState(game , first , dequeued));
 	}
 }

@@ -1,20 +1,18 @@
 public class WaitingState : IGameState
 {
-	private GameManager game;
+	GameManager game;
+	public WaitingState( GameManager gm ) { game = gm; }
 
-	public WaitingState( GameManager game )
-	{
-		this.game = game;
-	}
-
-	public void Enter() { }
+	public void Enter() { /* nothing */ }
 
 	public void OnCardSelected( Card card )
 	{
-		card.Reveal();
-		game.EventManager.CardRevealed(card);
+		// We only accept card if it's the earliest in visual buffer
+		// The GameManager will call this with the next visual flip, but double-check
+		Card dequeued = game.DequeueVisual();
+		if (dequeued == null || dequeued != card) return; // not ready
 
-		game.FirstCard = card;
-		game.ChangeState(new FirstFlipState(game));
+		// accept as first card
+		game.ChangeState(new FirstFlipState(game , card));
 	}
 }

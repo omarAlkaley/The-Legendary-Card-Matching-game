@@ -1,40 +1,76 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
+[RequireComponent(typeof(Animator))]
 public class Card : MonoBehaviour, IPointerClickHandler
 {
 	public int Id { get; private set; }
-	public bool IsRevealed { get; private set; }
+	public bool IsRevealed { get; private set; } = false;
+	public bool IsLocked { get; private set; } = false; // matched permanently
 
-	public void Initialize( int id )
+	[Header("Visuals")]
+	[SerializeField] private Image frontImage;
+	[SerializeField] private Sprite backSprite;
+
+	Animator animator;
+
+	void Awake()
+	{
+		animator = GetComponent<Animator>();
+	}
+
+	// Initialize with id and sprite
+	public void Initialize( int id , Sprite front )
 	{
 		Id = id;
-		HideInstant();
+		if (frontImage != null) frontImage.sprite = front;
+		IsRevealed = false;
+		IsLocked = false;
+		// ensure closed pose
+		animator.Play("Closed" , 0 , 1f);
 	}
 
 	public void OnPointerClick( PointerEventData eventData )
 	{
-		if (!IsRevealed)
-			GameManager.Instance.SelectCard(this);
+		if (IsLocked) return;
+		if (IsRevealed) return;
+
+		// Visual flip happens immediately (A2)
+		RevealVisual();
+		GameManager.Instance.RegisterVisualFlip(this);
 	}
 
-	public void Reveal()
+	// Visual reveal (immediate)
+	public void RevealVisual()
 	{
+		if (IsRevealed || IsLocked) return;
 		IsRevealed = true;
-		// Trigger flip animation
-		GetComponent<Animator>().SetTrigger("FlipOpen");
+		animator.SetTrigger("FlipOpen");
+		GameManager.Instance.EventManager.PlayFlipSFX();
 	}
 
-	public void Hide()
+	// Visual close (can be called later)
+	public void CloseVisual()
 	{
+		if (!IsRevealed || IsLocked) return;
 		IsRevealed = false;
-		// Trigger flip back animation
-		GetComponent<Animator>().SetTrigger("FlipClose");
+		animator.SetTrigger("FlipClose");
 	}
 
-	public void HideInstant()
+	// Permanently lock as matched and play match animation
+	public void SetMatched()
+	{
+		if (IsLocked) return;
+		IsLocked = true;
+		animator.SetTrigger("Match");
+		GameManager.Instance.EventManager.PlayMatchSFX();
+	}
+
+	// Helper to force closed instantly (used on load)
+	public void ForceClosed()
 	{
 		IsRevealed = false;
-		// instantly set closed state
+		animator.Play("Closed" , 0 , 1f);
 	}
 }
