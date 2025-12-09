@@ -87,13 +87,11 @@ public class UICard : MonoBehaviour, IPointerClickHandler
 
 		front.SetActive(false);
 		back.SetActive(true);
-
-		Debug.Log($"Card {cardIndex} setup - Back raycast: {backImage.raycastTarget}, Front raycast: {frontImage.raycastTarget}");
 	}
 
 	public void OnPointerClick( PointerEventData eventData )
 	{
-		Debug.Log($"Card {cardIndex} clicked!");
+		//Debug.Log($"Card {cardIndex} clicked!");
 		currentState.OnClick(this);
 	}
 

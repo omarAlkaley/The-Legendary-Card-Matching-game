@@ -9,7 +9,7 @@ public class SaveLoadManager
 		string json = JsonUtility.ToJson(data);
 		PlayerPrefs.SetString(SAVE_KEY , json);
 		PlayerPrefs.Save();
-		Debug.Log("Game Saved");
+		//Debug.Log("Game Saved");
 	}
 
 	public SaveData Load()
@@ -18,7 +18,7 @@ public class SaveLoadManager
 		{
 			string json = PlayerPrefs.GetString(SAVE_KEY);
 			SaveData data = JsonUtility.FromJson<SaveData>(json);
-			Debug.Log("Game Loaded");
+			//Debug.Log("Game Loaded");
 			return data;
 		}
 		return null;

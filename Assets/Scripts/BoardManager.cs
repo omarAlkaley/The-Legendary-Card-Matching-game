@@ -73,7 +73,7 @@ public class BoardManager
 		RectTransform container = gameManager.boardContainer;
 		if (container == null)
 		{
-			Debug.LogError("Board container is null!");
+			//Debug.LogError("Board container is null!");
 			return;
 		}
 
@@ -84,29 +84,28 @@ public class BoardManager
 			gridLayout = container.gameObject.AddComponent<GridLayoutGroup>();
 		}
 
-		// Force container to update its layout
-		Canvas.ForceUpdateCanvases();
-		LayoutRebuilder.ForceRebuildLayoutImmediate(container);
+		// Padding for container
+		float padding = 20f;
 
 		// Get actual runtime size of container
 		float containerWidth = container.rect.width;
 		float containerHeight = container.rect.height;
 
-		// Add padding
-		float padding = 80f;
 		float usableWidth = containerWidth - ( padding * 2 );
 		float usableHeight = containerHeight - ( padding * 2 );
 
-		// Calculate card size based on grid
+		// Total spacing
 		float totalSpacingX = ( config.cols - 1 ) * config.cardSpacing;
 		float totalSpacingY = ( config.rows - 1 ) * config.cardSpacing;
 
-		float maxCardWidth = ( usableWidth - totalSpacingX ) / config.cols;
-		float maxCardHeight = ( usableHeight - totalSpacingY ) / config.rows;
+		// Calculate max card size
+		float cellWidth = ( usableWidth - totalSpacingX ) / config.cols;
+		float cellHeight = ( usableHeight - totalSpacingY ) / config.rows;
 
-		// Use square cards
-		float cardSize = Mathf.Min(maxCardWidth , maxCardHeight);
-		cardSize = Mathf.Max(cardSize , 20f);
+		// Square card size, clamped to min/max
+		float minSize = 100f;   // Minimum size of card
+		float maxSize = 120f;  // Maximum size of card
+		float cardSize = Mathf.Clamp(Mathf.Min(cellWidth , cellHeight) , minSize , maxSize);
 
 		// Configure GridLayoutGroup
 		gridLayout.cellSize = new Vector2(cardSize , cardSize);
@@ -118,7 +117,11 @@ public class BoardManager
 		gridLayout.startCorner = GridLayoutGroup.Corner.UpperLeft;
 		gridLayout.startAxis = GridLayoutGroup.Axis.Horizontal;
 
-		// Create cards - GridLayoutGroup will position them automatically
+		// Force layout rebuild before adding cards
+		Canvas.ForceUpdateCanvases();
+		LayoutRebuilder.ForceRebuildLayoutImmediate(container);
+
+		// Create cards
 		int index = 0;
 		for (int row = 0; row < config.rows; row++)
 		{
@@ -138,7 +141,6 @@ public class BoardManager
 			}
 		}
 
-		// Force layout rebuild after adding all cards
 		LayoutRebuilder.ForceRebuildLayoutImmediate(container);
 	}
 
