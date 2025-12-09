@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-public class UICard : MonoBehaviour, IPointerClickHandler
+public class UICard : MonoBehaviour
 {
 	private CardData data;
 	private BoardManager boardManager;
@@ -16,7 +16,8 @@ public class UICard : MonoBehaviour, IPointerClickHandler
 	private GameObject front;
 	private GameObject back;
 	private CanvasGroup canvasGroup;
-
+	private Button frontButton;
+	private Button backButton;
 	public CardData Data => data;
 	public bool IsFlipped { get; private set; }
 	public bool IsMatched { get; private set; }
@@ -37,13 +38,11 @@ public class UICard : MonoBehaviour, IPointerClickHandler
 	{
 		rectTransform = GetComponent<RectTransform>();
 		if (rectTransform == null)
-		{
 			rectTransform = gameObject.AddComponent<RectTransform>();
-		}
 
 		canvasGroup = gameObject.AddComponent<CanvasGroup>();
 
-		// Create back (blue card back) - THIS is now the clickable element
+		// BACK
 		back = new GameObject("Back");
 		back.transform.SetParent(transform);
 		RectTransform backRect = back.AddComponent<RectTransform>();
@@ -55,14 +54,16 @@ public class UICard : MonoBehaviour, IPointerClickHandler
 		backImage = back.AddComponent<Image>();
 		backImage.sprite = GameManager.Instance.cardBackSprite;
 		backImage.color = GameManager.Instance.cardBackColor;
-		backImage.raycastTarget = true; // ENABLE raycast on back - this catches clicks
+		backImage.raycastTarget = true;
 
-		// Add click handler to back image
-		Button backButton = back.AddComponent<Button>();
+		backButton = back.AddComponent<Button>();
 		backButton.transition = Selectable.Transition.None;
-		backButton.onClick.AddListener(() => OnPointerClick(null));
+		backButton.onClick.AddListener(() =>
+		{
+			boardManager.OnCardClicked(this); 
+		});
 
-		// Create front (card icon)
+		// FRONT
 		front = new GameObject("Front");
 		front.transform.SetParent(transform);
 		RectTransform frontRect = front.AddComponent<RectTransform>();
@@ -74,25 +75,21 @@ public class UICard : MonoBehaviour, IPointerClickHandler
 		frontImage = front.AddComponent<Image>();
 		frontImage.sprite = data.icon;
 		frontImage.preserveAspect = true;
-		frontImage.raycastTarget = true; // ENABLE raycast on front too
+		frontImage.raycastTarget = true;
 
-		// Add click handler to front image
-		Button frontButton = front.AddComponent<Button>();
+		frontButton = front.AddComponent<Button>();
 		frontButton.transition = Selectable.Transition.None;
-		frontButton.onClick.AddListener(() => OnPointerClick(null));
+		frontButton.onClick.AddListener(() =>
+		{
+			boardManager.OnCardClicked(this); 
+		});
 
-		// Add padding to front image
+		// Padding for front
 		frontRect.offsetMin = new Vector2(10 , 10);
 		frontRect.offsetMax = new Vector2(-10 , -10);
 
 		front.SetActive(false);
 		back.SetActive(true);
-	}
-
-	public void OnPointerClick( PointerEventData eventData )
-	{
-		//Debug.Log($"Card {cardIndex} clicked!");
-		currentState.OnClick(this);
 	}
 
 	public void Flip( bool faceUp )
@@ -136,18 +133,23 @@ public class UICard : MonoBehaviour, IPointerClickHandler
 		currentState = new CardMatchedState();
 		currentState.Enter(this);
 
-		// Pulse animation for matched cards
+		// Disable buttons so card is no longer clickable
+		if (backButton != null) backButton.interactable = false;
+		if (frontButton != null) frontButton.interactable = false;
+
+		// Pulse animation
 		LeanTween.scale(gameObject , Vector3.one * 1.1f , 0.2f)
 			.setEase(LeanTweenType.easeOutQuad)
 			.setOnComplete(() =>
 			{
-				LeanTween.scale(gameObject , Vector3.one , 0.2f)
-					.setOnComplete(() =>
-					{
-						// Fade out matched cards
-						LeanTween.alpha(rectTransform , 0.5f , 0.3f);
-					});
+				LeanTween.scale(gameObject , Vector3.one , 0.2f);
 			});
+
+		// Fade out only front and back images
+		if (frontImage != null)
+			LeanTween.alpha(frontImage.rectTransform , 0.5f , 0.3f);
+		if (backImage != null)
+			LeanTween.alpha(backImage.rectTransform , 0.5f , 0.3f);
 	}
 
 	public void NotifyBoardManager()
